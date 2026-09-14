@@ -17,6 +17,7 @@ export type TopicExposureStatus =
 export type ParsedSyllabusModule = {
   courseCode?: string;
   courseTitle?: string;
+  sourcePage?: number;
   weekOrModule: string;
   topic: string;
   learningObjectives: string[];
@@ -70,6 +71,8 @@ export type ProgramTerm =
   | "Term 4"
   | "Term 5";
 
+export type ProgramTermAssignment = ProgramTerm | "Unassigned";
+
 export type TermRule = {
   term: ProgramTerm;
   label: string;
@@ -99,12 +102,16 @@ export type SimRecommendationResult = {
   term: ProgramTerm;
   termLabel: string;
   courseCode?: string;
+  courseTitle?: string;
   weekOrModule: string;
   topic: string;
   learningObjectives: string[];
   detectedBloomLevel: BloomLevel;
   clinicalFocusSummary: string[];
   topicExposureStatus: TopicExposureStatus;
+  sourcePage?: number;
+  readinessRequirements: string[];
+  implementationSequence: string[];
   assignedDifficultyTier: string;
   allowedDifficulties: SimulationDifficulty[];
   alignmentStatus: AlignmentStatus;
@@ -143,10 +150,12 @@ export type UploadedSyllabus = {
   detectedInstitutionName?: string;
   detectedCourseCode?: string;
   detectedCourseTitle?: string;
-  assignedProgramTerm: ProgramTerm;
+  assignedProgramTerm: ProgramTermAssignment;
   termAssignmentSource?: "course_code" | "filename" | "content_inference" | "manual_override";
   termAssignmentConfidence?: "high" | "medium" | "low";
   termAssignmentReason?: string;
+  parseConfidence?: "high" | "medium" | "low";
+  extractionMethod?: "text" | "visual_pdf" | "deterministic_fallback";
   parsedModules: ParsedSyllabusModule[];
   parsingStatus: "pending" | "parsing" | "parsed" | "fallback" | "error";
   rawParsedJson?: unknown;
@@ -163,6 +172,8 @@ export type ProgramTermAlignment = {
     detectedCourseCode?: string;
     parsingStatus?: string;
     parseMessage?: string;
+    parseConfidence?: "high" | "medium" | "low";
+    extractionMethod?: "text" | "visual_pdf" | "deterministic_fallback";
     clinicalFocusSummary: string[];
     recommendations: SimRecommendationResult[];
   }>;

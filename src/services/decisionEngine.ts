@@ -241,6 +241,8 @@ export function assignSims(
         detectedBloomLevel: "Understand",
         clinicalFocusSummary: [],
         topicExposureStatus: "first_introduction",
+        readinessRequirements: ["Readable curriculum evidence and faculty term assignment are required before selecting a simulation."],
+        implementationSequence: [],
         assignedDifficultyTier: rule.assignedTier,
         allowedDifficulties: getAllowedDifficulties(term),
         alignmentStatus: "Needs faculty review",
@@ -308,12 +310,22 @@ export function assignSims(
       term: moduleTerm,
       termLabel: moduleRule.label,
       courseCode: module.courseCode,
+      courseTitle: module.courseTitle,
       weekOrModule: module.weekOrModule,
       topic: module.topic,
       learningObjectives: module.learningObjectives,
       detectedBloomLevel: module.detectedBloomLevel,
       clinicalFocusSummary: getClinicalFocusTerms(module).slice(0, 12),
       topicExposureStatus: module.topicExposureStatus,
+      sourcePage: module.sourcePage,
+      readinessRequirements: buildReadinessRequirements(module, recommendedSims[0]?.difficulty),
+      implementationSequence: [
+        "Teach the concept in class.",
+        "Practice and verify the related lab competency.",
+        "Assign the simulation only after prerequisite exposure and readiness are confirmed.",
+        "Complete simulation review and faculty debrief using Allan's 3 Ws.",
+        "Review analytics, remediate identified gaps, and reassess.",
+      ],
       assignedDifficultyTier: moduleRule.assignedTier,
       allowedDifficulties: getAllowedDifficulties(moduleTerm),
       alignmentStatus: status,
@@ -341,12 +353,38 @@ export function buildProgramTermAlignment(
         detectedCourseCode: syllabus.detectedCourseCode,
         parsingStatus: syllabus.parsingStatus,
         parseMessage: syllabus.parseMessage,
+        parseConfidence: syllabus.parseConfidence,
+        extractionMethod: syllabus.extractionMethod,
         clinicalFocusSummary: uniqueStrings(
           syllabus.parsedModules.flatMap((module) => getClinicalFocusTerms(module)),
         ).slice(0, 14),
-        recommendations: assignSims(syllabus.parsedModules, syllabus.assignedProgramTerm, catalog),
+        recommendations: assignSims(syllabus.parsedModules, term, catalog),
       })),
   }));
+}
+
+function buildReadinessRequirements(
+  module: ParsedSyllabusModule,
+  difficulty?: SimulationDifficulty,
+): string[] {
+  const requirements = [
+    "Relevant concepts have already been introduced in class.",
+    "Related equipment and clinical skills have been practiced in the lab.",
+  ];
+  const focusText = getClinicalFocusTerms(module).join(" ").toLowerCase();
+  if (/oxygen|aerosol|equipment|ventilat|airway/.test(focusText)) {
+    requirements.push("The learner can select, set up, and verify the applicable equipment.");
+  }
+  if (/abg|acid-base|laboratory|diagnostic|imaging|monitor/.test(focusText)) {
+    requirements.push("The learner can interpret the relevant assessment and diagnostic data.");
+  }
+  if (difficulty === "Advanced" || difficulty === "NBRC" || difficulty === "Variable") {
+    requirements.push("The learner can prioritize problems, justify an intervention, and reassess the response independently.");
+  }
+  if (difficulty === "NBRC" || difficulty === "Variable") {
+    requirements.push("Faculty has verified integrated entry-level judgment before NBRC-style use.");
+  }
+  return requirements;
 }
 
 export function generateDebriefQuestions(

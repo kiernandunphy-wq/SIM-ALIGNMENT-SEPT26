@@ -1,7 +1,7 @@
-import { ParsedSyllabusModule, ProgramTerm } from "../types";
+import { ParsedSyllabusModule, ProgramTerm, ProgramTermAssignment } from "../types";
 
 type TermAssignment = {
-  term: ProgramTerm;
+  term: ProgramTermAssignment;
   source: "course_code" | "filename" | "content_inference";
   confidence: "high" | "medium" | "low";
   reason: string;
@@ -35,8 +35,8 @@ export function inferProgramTermFromParsedSyllabus(
   }
 
   // 2. Try to extract course code number from courseCode or filename (matches RC, RT, RCP, RESP, RRT, etc.)
-  const courseCodeMatch = (courseCode || "").match(/(?:[A-Za-z]{2,4})?[\s-_]*([1-5]\d{2})/i) ||
-                          filename.match(/(?:[A-Za-z]{2,4})?[\s-_]*([1-5]\d{2})/i);
+  const courseCodeMatch = (courseCode || "").match(/(?:[A-Za-z]{2,4})?[\s-_]*([1-5]\d{2})(?!\d)/i) ||
+                          filename.match(/(?:[A-Za-z]{2,4})?[\s-_]*([1-5]\d{2})(?!\d)/i);
 
   if (courseCodeMatch) {
     const courseNum = parseInt(courseCodeMatch[1], 10);
@@ -99,8 +99,8 @@ export function inferProgramTermFromParsedSyllabus(
     if (mod.detectedBloomLevel === "Create" || mod.detectedBloomLevel === "Evaluate") scores["Term 5"] += 0.5;
   }
 
-  let highestScore = -1;
-  let bestTerm: ProgramTerm = "Term 1"; // Fallback
+  let highestScore = 0;
+  let bestTerm: ProgramTermAssignment = "Unassigned";
 
   for (const [term, score] of Object.entries(scores)) {
     if (score > highestScore) {
@@ -114,7 +114,9 @@ export function inferProgramTermFromParsedSyllabus(
   if (highestScore > 10) confidence = "high";
   else if (highestScore > 4) confidence = "medium";
 
-  const reason = `Content analysis aligned best with ${bestTerm} (score: ${highestScore}).`;
+  const reason = bestTerm === "Unassigned"
+    ? "No reliable program-term evidence was found; faculty assignment is required."
+    : `Content analysis aligned best with ${bestTerm} (score: ${highestScore}).`;
 
   return { term: bestTerm, source: "content_inference", confidence, reason };
 }

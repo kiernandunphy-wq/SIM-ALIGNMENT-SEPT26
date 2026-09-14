@@ -14,6 +14,7 @@ import { LucideSparkles, LucideCheckCircle2, LucideBookOpen, LucideLightbulb, Lu
 import type {
   ClassmateAssignment,
   ProgramTerm,
+  ProgramTermAssignment,
   ProgramTermAlignment,
   SimRecommendationResult,
   UploadedSyllabus,
@@ -182,7 +183,7 @@ function App() {
     setMessage("Pasted syllabus added. Assign it to a program term, then analyze.");
   }
 
-  function updateTerm(id: string, assignedProgramTerm: ProgramTerm) {
+  function updateTerm(id: string, assignedProgramTerm: ProgramTermAssignment) {
     setSyllabi((current) =>
       current.map((syllabus) =>
         syllabus.id === id ? { ...syllabus, assignedProgramTerm, termAssignmentSource: "manual_override", termAssignmentConfidence: "high", termAssignmentReason: "Faculty manually adjusted the program term." } : syllabus,
@@ -230,9 +231,13 @@ function App() {
       termAssignmentSource,
       termAssignmentConfidence,
       termAssignmentReason,
+      parseConfidence: response.parseConfidence,
+      extractionMethod: response.extractionMethod,
       rawParsedJson: response.raw,
       parsingStatus: (!response.parsed.modules || response.parsed.modules.length === 0) ? "error" : "parsed",
-      parseMessage: response.parseMessage
+      parseMessage: response.error
+        ? response.error
+        : response.parseMessage
         ? response.parseMessage
         : (!response.parsed.modules || response.parsed.modules.length === 0)
             ? "Parsing failed: No modules or curriculum topics could be extracted."
@@ -252,7 +257,7 @@ function App() {
                 id: crypto.randomUUID(),
                 fileName: "Pasted syllabus 1",
                 rawText: pastedText,
-                assignedProgramTerm: "Term 1" as ProgramTerm,
+                assignedProgramTerm: "Unassigned" as ProgramTermAssignment,
                 parsedModules: [],
                 parsingStatus: "pending" as const,
               },
@@ -271,7 +276,8 @@ function App() {
     try {
       const analyzed: LocalUploadedSyllabus[] = [];
       for (let i = 0; i < pendingSyllabi.length; i++) {
-        analyzed.push(await analyzeSyllabus(pendingSyllabi[i]));
+        const parsedSyllabus = await analyzeSyllabus(pendingSyllabi[i]);
+        analyzed.push(...splitSyllabusByCourse(parsedSyllabus));
         setAnalysisProgress(i + 1);
         if (i < pendingSyllabi.length - 1) {
           await new Promise((r) => setTimeout(r, 4500));
@@ -439,6 +445,8 @@ function App() {
                 </p>
                 <small>Parsing status: {syllabus.parsingStatus}</small>
                 {syllabus.parseMessage && <small> - {syllabus.parseMessage}</small>}
+                {syllabus.parseConfidence && <small> · Extraction confidence: {syllabus.parseConfidence}</small>}
+                {syllabus.extractionMethod && <small> · Method: {syllabus.extractionMethod.replace(/_/g, " ")}</small>}
                 {syllabus.parsingStatus === "error" && syllabus.fileName.toLowerCase().endsWith(".pdf") && (
                    <div style={{ color: "#d97706", fontSize: "0.85rem", marginTop: "4px" }}>
                      Paste this syllabus text below and re-run analysis.
@@ -459,8 +467,9 @@ function App() {
                 Program term
                 <select
                   value={syllabus.assignedProgramTerm}
-                  onChange={(event) => updateTerm(syllabus.id, event.target.value as ProgramTerm)}
+                  onChange={(event) => updateTerm(syllabus.id, event.target.value as ProgramTermAssignment)}
                 >
+                  <option value="Unassigned">Unassigned — faculty review required</option>
                   {programTerms.map((term) => (
                     <option key={term} value={term}>
                       {term}: {getTermRules(term).label}
@@ -526,6 +535,42 @@ function App() {
 
     </main>
   );
+}
+
+function splitSyllabusByCourse(syllabus: LocalUploadedSyllabus): LocalUploadedSyllabus[] {
+  if (syllabus.parsingStatus !== "parsed" || syllabus.parsedModules.length === 0) {
+    return [syllabus];
+  }
+
+  const groups = new Map<string, typeof syllabus.parsedModules>();
+  for (const module of syllabus.parsedModules) {
+    const courseCode = module.courseCode?.trim() || syllabus.detectedCourseCode?.trim() || "";
+    const courseTitle = module.courseTitle?.trim() || syllabus.detectedCourseTitle?.trim() || "";
+    const key = `${courseCode.toLowerCase()}|${courseTitle.toLowerCase()}`;
+    groups.set(key, [...(groups.get(key) || []), module]);
+  }
+
+  if (groups.size <= 1) return [syllabus];
+
+  return Array.from(groups.values()).map((modules, index) => {
+    const detectedCourseCode = modules.find(module => module.courseCode)?.courseCode;
+    const detectedCourseTitle = modules.find(module => module.courseTitle)?.courseTitle;
+    const assignment = syllabus.termAssignmentSource === "manual_override"
+      ? null
+      : inferProgramTermFromParsedSyllabus(modules, syllabus.fileName, detectedCourseCode);
+    return {
+      ...syllabus,
+      id: `${syllabus.id}-course-${index + 1}`,
+      fileName: `${syllabus.fileName} — ${detectedCourseCode || detectedCourseTitle || `Course ${index + 1}`}`,
+      detectedCourseCode,
+      detectedCourseTitle,
+      parsedModules: modules,
+      assignedProgramTerm: assignment?.term || syllabus.assignedProgramTerm,
+      termAssignmentSource: assignment?.source || syllabus.termAssignmentSource,
+      termAssignmentConfidence: assignment?.confidence || syllabus.termAssignmentConfidence,
+      termAssignmentReason: assignment?.reason || syllabus.termAssignmentReason,
+    };
+  });
 }
 
 function TermAlignmentSection({
@@ -611,6 +656,7 @@ function RecommendationCard({
             {result.courseCode ? ` · ${formatCourseCode(result.courseCode)}` : ""}
           </h4>
           <p>{fixSpacing(result.topic)}</p>
+          {result.sourcePage && <small>Source page {result.sourcePage}</small>}
         </div>
         <span className={`status ${result.alignmentStatus.toLowerCase().replace(/\s+/g, "-")}`}>
           {result.alignmentStatus}
@@ -667,6 +713,17 @@ function RecommendationCard({
               ))
             )}
           </ul>
+        </section>
+      </div>
+
+      <div className="split">
+        <section>
+          <h5>Readiness gates</h5>
+          <ul>{result.readinessRequirements.map((item) => <li key={item}>{fixSpacing(item)}</li>)}</ul>
+        </section>
+        <section>
+          <h5>Recommended learning cycle</h5>
+          <ol>{result.implementationSequence.map((item) => <li key={item}>{fixSpacing(item)}</li>)}</ol>
         </section>
       </div>
 
@@ -747,10 +804,10 @@ function DebriefList({ questions }: { questions: SimRecommendationResult["recomm
   );
 }
 
-function inferProgramTerm(value: string): ProgramTerm {
+function inferProgramTerm(value: string): ProgramTermAssignment {
   const match = value.match(/\b(?:RT|RCP)\s*-?\s*(\d{3})(?:[^\d]|$)/i);
   if (!match) {
-    return "Term 1";
+    return "Unassigned";
   }
 
   const courseNumber = Number(match[1]);
@@ -766,13 +823,19 @@ function buildFiveTermReportHtml(programMap: ProgramTermAlignment[], syllabi: Lo
   const rawInstitution = syllabi.find(s => s.detectedInstitutionName)?.detectedInstitutionName;
   const institutionName = rawInstitution || "Respiratory Therapy Program";
   
-  const allParsed = syllabi.every(s => s.parsingStatus === "parsed");
-  const reportLabel = allParsed ? "Complete" : "Draft";
+  const allVerified = syllabi.length > 0 && syllabi.every(s =>
+    s.parsingStatus === "parsed" &&
+    s.assignedProgramTerm !== "Unassigned" &&
+    s.extractionMethod !== "deterministic_fallback" &&
+    (s.parseConfidence === "high" || s.parseConfidence === "medium")
+  );
+  const reportLabel = allVerified ? "Complete" : "Draft";
   const parsedCount = syllabi.filter(s => s.parsingStatus === "parsed").length;
   
   let statusBanner = "";
-  if (!allParsed) {
-    statusBanner = `<div class="status-banner"><strong>${reportLabel} Report:</strong> ${parsedCount} of ${syllabi.length} syllabus item(s) parsed. Pending/failed items are placeholders.</div>`;
+  if (!allVerified) {
+    const unassignedCount = syllabi.filter(s => s.assignedProgramTerm === "Unassigned").length;
+    statusBanner = `<div class="status-banner"><strong>Draft Report:</strong> ${parsedCount} of ${syllabi.length} syllabus item(s) parsed; ${unassignedCount} require faculty term assignment. Low-confidence or fallback results are not considered verified.</div>`;
   } else {
     statusBanner = `<div class="status-banner complete"><strong>${reportLabel} Report:</strong> All ${syllabi.length} syllabus item(s) parsed and aligned successfully.</div>`;
   }
@@ -805,10 +868,17 @@ function buildFiveTermReportHtml(programMap: ProgramTermAlignment[], syllabi: Lo
       `);
     } else {
       uploadedInTerm.forEach((syllabus) => {
-        const codeFormatted = formatCourseCode(syllabus.detectedCourseCode);
-        const courseDisplay = codeFormatted 
-          ? `<strong>${escapeHtml(codeFormatted)}</strong><br/><small>${cleanAndEscape(syllabus.detectedCourseTitle || syllabus.fileName)}</small>`
-          : `<strong>${cleanAndEscape(syllabus.fileName)}</strong>`;
+        const parsedCourses = Array.from(new Map(
+          syllabus.recommendations
+            .filter(result => result.courseCode || result.courseTitle)
+            .map(result => [
+              `${result.courseCode || ""}|${result.courseTitle || ""}`,
+              `${result.courseCode ? formatCourseCode(result.courseCode) : ""}${result.courseCode && result.courseTitle ? " — " : ""}${result.courseTitle || ""}`,
+            ])
+        ).values());
+        const courseDisplay = parsedCourses.length > 0
+          ? parsedCourses.map(course => `<strong>${cleanAndEscape(course)}</strong>`).join("<br/>")
+          : `<strong>${cleanAndEscape(syllabus.detectedCourseTitle || syllabus.fileName)}</strong>`;
 
         // Gather top recommendations for this syllabus
         const topRecs = syllabus.recommendations.map(r => r.recommendedSims[0]).filter(Boolean);

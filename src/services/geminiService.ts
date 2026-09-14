@@ -118,7 +118,7 @@ export const fallbackParsedSyllabus: ParsedSyllabusResponse = {
 export async function parseSyllabusWithGemini(
   syllabusText: string,
   syllabusFile?: File | null,
-): Promise<{ parsed: ParsedSyllabusResponse; raw: unknown; usedFallback: boolean; error?: string; parseMessage?: string }> {
+): Promise<{ parsed: ParsedSyllabusResponse; raw: unknown; usedFallback: boolean; error?: string; parseMessage?: string; parseConfidence?: "high" | "medium" | "low"; extractionMethod?: "text" | "visual_pdf" | "deterministic_fallback" }> {
   try {
     validateParserInput(syllabusText, syllabusFile);
 
@@ -148,6 +148,8 @@ export async function parseSyllabusWithGemini(
           raw: data.raw ?? data.parsed, 
           usedFallback: data.usedFallback || false, 
           parseMessage: data.parseMessage || undefined,
+          parseConfidence: data.parseConfidence || undefined,
+          extractionMethod: data.extractionMethod || undefined,
         };
       }
     } else {
@@ -227,6 +229,9 @@ function sanitizeModule(raw: unknown): ParsedSyllabusModule {
   return {
     courseCode: stringOrUndefined(module.courseCode),
     courseTitle: stringOrUndefined(module.courseTitle),
+    sourcePage: typeof module.sourcePage === "number" && Number.isFinite(module.sourcePage) && module.sourcePage > 0
+      ? Math.floor(module.sourcePage)
+      : undefined,
     weekOrModule: stringOrUndefined(module.weekOrModule) || "Module",
     topic: stringOrUndefined(module.topic) || "Unspecified topic",
     learningObjectives: stringArray(module.learningObjectives),
