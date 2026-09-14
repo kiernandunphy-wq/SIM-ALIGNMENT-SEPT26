@@ -145,6 +145,8 @@ export type SimRecommendationResult = {
 
 export type UploadedSyllabus = {
   id: string;
+  sourceDocumentId?: string;
+  sourceFileName?: string;
   fileName: string;
   rawText?: string;
   detectedInstitutionName?: string;

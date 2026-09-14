@@ -218,7 +218,13 @@ export function scoreSim(
     }
   }
 
-  return rawScore;
+  const isCapstoneReadinessModule = term === "Term 5" && /comprehensive|seminar|capstone|nbrc|rte|credential|entry-level|independent clinical judgment/.test(allModuleText);
+  if (isCapstoneReadinessModule) {
+    if (sim.difficulty === "NBRC" || sim.difficulty === "Variable") rawScore += 25;
+    if (sim.difficulty === "Basic" || sim.difficulty === "Intermediate") rawScore -= 25;
+  }
+
+  return Math.max(0, Math.min(100, rawScore));
 }
 
 export function assignSims(

@@ -154,14 +154,18 @@ function App() {
 
   function handleFiles(files: FileList | null) {
     if (!files?.length) return;
-    const newSyllabi: LocalUploadedSyllabus[] = Array.from(files).map((file) => ({
-      id: crypto.randomUUID(),
+    const newSyllabi: LocalUploadedSyllabus[] = Array.from(files).map((file) => {
+      const id = crypto.randomUUID();
+      return {
+      id,
+      sourceDocumentId: id,
+      sourceFileName: file.name,
       fileName: file.name,
       file,
       assignedProgramTerm: inferProgramTerm(file.name),
       parsedModules: [],
       parsingStatus: "pending",
-    }));
+    }});
     setSyllabi((current) => [...current, ...newSyllabi]);
     setMessage("Files added. Assign each syllabus to a program term, then analyze.");
   }
@@ -546,7 +550,8 @@ function splitSyllabusByCourse(syllabus: LocalUploadedSyllabus): LocalUploadedSy
   for (const module of syllabus.parsedModules) {
     const courseCode = module.courseCode?.trim() || syllabus.detectedCourseCode?.trim() || "";
     const courseTitle = module.courseTitle?.trim() || syllabus.detectedCourseTitle?.trim() || "";
-    const key = `${courseCode.toLowerCase()}|${courseTitle.toLowerCase()}`;
+    const normalizedTitle = courseTitle.toLowerCase().replace(/\b(respiratory care|respiratory)\b/g, "respiratory").replace(/[^a-z0-9]+/g, " ").trim();
+    const key = courseCode ? `code:${courseCode.toLowerCase()}` : `title:${normalizedTitle}`;
     groups.set(key, [...(groups.get(key) || []), module]);
   }
 
@@ -561,6 +566,8 @@ function splitSyllabusByCourse(syllabus: LocalUploadedSyllabus): LocalUploadedSy
     return {
       ...syllabus,
       id: `${syllabus.id}-course-${index + 1}`,
+      sourceDocumentId: syllabus.sourceDocumentId || syllabus.id,
+      sourceFileName: syllabus.sourceFileName || syllabus.fileName,
       fileName: `${syllabus.fileName} — ${detectedCourseCode || detectedCourseTitle || `Course ${index + 1}`}`,
       detectedCourseCode,
       detectedCourseTitle,
@@ -830,14 +837,16 @@ function buildFiveTermReportHtml(programMap: ProgramTermAlignment[], syllabi: Lo
     (s.parseConfidence === "high" || s.parseConfidence === "medium")
   );
   const reportLabel = allVerified ? "Complete" : "Draft";
-  const parsedCount = syllabi.filter(s => s.parsingStatus === "parsed").length;
+  const sourceDocuments = new Set(syllabi.map(s => s.sourceDocumentId || s.id));
+  const parsedDocuments = new Set(syllabi.filter(s => s.parsingStatus === "parsed").map(s => s.sourceDocumentId || s.id));
+  const parsedCount = parsedDocuments.size;
   
   let statusBanner = "";
   if (!allVerified) {
     const unassignedCount = syllabi.filter(s => s.assignedProgramTerm === "Unassigned").length;
-    statusBanner = `<div class="status-banner"><strong>Draft Report:</strong> ${parsedCount} of ${syllabi.length} syllabus item(s) parsed; ${unassignedCount} require faculty term assignment. Low-confidence or fallback results are not considered verified.</div>`;
+    statusBanner = `<div class="status-banner"><strong>Draft Report:</strong> ${parsedCount} of ${sourceDocuments.size} source document(s) parsed into ${syllabi.filter(s => s.parsingStatus === "parsed").length} course record(s); ${unassignedCount} require faculty term assignment. Low-confidence or fallback results are not considered verified.</div>`;
   } else {
-    statusBanner = `<div class="status-banner complete"><strong>${reportLabel} Report:</strong> All ${syllabi.length} syllabus item(s) parsed and aligned successfully.</div>`;
+    statusBanner = `<div class="status-banner complete"><strong>${reportLabel} Report:</strong> All ${sourceDocuments.size} source document(s) parsed into ${syllabi.length} course record(s) and aligned successfully.</div>`;
   }
 
   const failedSyllabi = syllabi.filter(s => s.parsingStatus === "error");
