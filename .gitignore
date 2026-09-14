@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.env
+.env.local
+*.log
+tmp/
+.tools/
+.vscode/
+.zip-review/
+node-v*-win-x64.zip
+syllabusalignment-*.zip
+command_test.txt

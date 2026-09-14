@@ -1,0 +1,35 @@
+{
+  "name": "classmatelr-syllabus-alignment-prototype",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "node server/dev.mjs",
+    "vite-dev": "vite",
+    "dev:full": "node server/dev.mjs",
+    "api": "node server/geminiProxy.mjs",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "start": "node server/geminiProxy.mjs",
+    "test": "node --test server/*.test.mjs"
+  },
+  "dependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "jspdf": "^4.2.1",
+    "lottie-react": "^3.1.1",
+    "lucide-react": "^1.38.0",
+    "mammoth": "^1.12.0",
+    "pdf-parse": "^1.1.1",
+    "pdfjs-dist": "^6.0.227",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.7"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "tailwindcss": "^4.3.3"
+  }
+}

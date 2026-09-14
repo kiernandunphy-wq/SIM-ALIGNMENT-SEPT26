@@ -1,0 +1,6 @@
+{
+  "name": "ClassmateLR Syllabus Alignment",
+  "description": "A syllabus-to-simulation alignment prototype using Gemini AI to parse syllabus structures and a deterministic rule engine to recommend relevant respiratory therapy simulations.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
